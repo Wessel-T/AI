@@ -25,6 +25,7 @@ class AIWrapper {
                 'temperature' => 0.7
                 ];
 
+
                 $ch = curl_init($this->apiUrl);
 
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -41,24 +42,72 @@ class AIWrapper {
                 if (curl_errno($ch)) {
                     throw new Exception('cURL error: ' . curl_error($ch));
                 }
+
                 curl_close($ch);
+
                 return $this->handleResponse($response, $httpCode);
             }
-                
-            
-public function processInput($ingredients) {
-    if (empty($ingredients)) {
-        throw new Exception("Geen ingrediënten opgegeven");
-}
 
-    $this->ingredients = $ingredients;
-    // Later hier API aanroepen
-    return true;
-}
-public function getResponse() {
-        // Voorlopig een standaard bericht teruggeven
-        $ingredientsList = implode(', ', $this->ingredients);
-        $this->response = "Recept met $ingredientsList wordt verwerkt";
-        return $this->response;
+
+    private function handleResponse($response, $httpCode) {
+        if ($httpCode !== 200) {
+            $error = json_decode($response, true);
+            $message = isset($error['error']['message']) ?
+                $error['error']['message'] : 'Onbekende API fout';
+            throw new Exception('API error (Code ' . $httpCode . '): ' . $message);
+        }
+
+        $decoded = json_decode($response, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('JSON decode error: ' . json_last_error_msg());
+        }
+
+        if (!isset($decoded['choices'][0]['message']['content'])) {
+            throw new Exception('Onverwachte API response structuur');
+        }
+
+        return $decoded['choices'][0]['message']['content'];
     }
+
+    public function generateRecipe($ingredients)
+    {
+        if (!is_array($ingredients)) {
+            throw new Exception('Ingrediënten moeten als array worden doorgegeven');
+        }
+        if (count($ingredients) === 0) {
+            throw new Exception('Geef minimaal één ingrediënt op');
+        }
+        $ingredientsList = implode(', ', $ingredients);
+        $prompt = <<<EOT
+
+Genereer een recept met de volgende ingrediënten:
+$ingredientsList
+Het recept moet de volgende onderdelen bevatten:
+1. Een creatieve naam voor het gerecht
+2. Een lijst met alle benodigde ingrediënten met hoeveelheden
+3. Stap-voor-stap bereidingswijze
+4. Geschatte bereidingstijd
+5. Aantal personen
+EOT;
+        return $this->makeApiRequest($prompt);
+    }
+
+
+
+        public function processInput($ingredients) {
+            if (empty($ingredients)) {
+                throw new Exception("Geen ingrediënten opgegeven");
+        }
+
+            $this->ingredients = $ingredients;
+            // Later hier API aanroepen
+            return true;
+        }
+        public function getResponse() {
+                // Voorlopig een standaard bericht teruggeven
+                $ingredientsList = implode(', ', $this->ingredients);
+                $this->response = "Recept met $ingredientsList wordt verwerkt";
+                return $this->response;
+            }
 }
